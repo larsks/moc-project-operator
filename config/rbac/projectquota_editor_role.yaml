@@ -1,0 +1,24 @@
+# permissions for end users to edit projectquota.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: projectquota-editor-role
+rules:
+- apiGroups:
+  - project.oddbit.com
+  resources:
+  - projectquota
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - project.oddbit.com
+  resources:
+  - projectquota/status
+  verbs:
+  - get

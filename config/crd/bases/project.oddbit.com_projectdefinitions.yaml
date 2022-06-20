@@ -1,0 +1,79 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: projectdefinitions.project.oddbit.com
+spec:
+  group: project.oddbit.com
+  names:
+    kind: ProjectDefinition
+    listKind: ProjectDefinitionList
+    plural: projectdefinitions
+    singular: projectdefinition
+    shortNames:
+      - projectdef
+  scope: Cluster
+  versions:
+  - name: v1beta1
+    schema:
+      openAPIV3Schema:
+        type: object
+        description: ProjectDefinition is the Schema for the projectdefinitions API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: Spec defines the desired state of ProjectDefinition
+            type: object
+            properties:
+              description:
+                type: string
+              requester:
+                type: string
+              admins:
+                type: array
+                items:
+                  type: string
+              members:
+                type: array
+                items:
+                  type: string
+              readers:
+                type: array
+                items:
+                  type: string
+              quota:
+                type: object
+                properties:
+                  quotaName:
+                    type: string
+                  quotaDefinition:
+                    type: object
+                    properties:
+                      resourceQuota:
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
+                      limitRange:
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
+            required:
+              - requester
+              - admins
+          status:
+            description: Status defines the observed state of ProjectDefinition
+            type: object
+            x-kubernetes-preserve-unknown-fields: true
+    served: true
+    storage: true
+    subresources:
+      status: {}

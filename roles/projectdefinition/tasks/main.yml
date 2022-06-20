@@ -1,0 +1,74 @@
+---
+# tasks file for ProjectDefinition
+
+# Set `op` variable to produce relevant task names in output
+- name: "{{ ansible_operator_meta.name }} : set operation name"
+  set_fact:
+    op: >-
+      {% if state == "absent" %}delete{% else %}create{% endif %}
+
+- name: "{{ ansible_operator_meta.name }} : {{ op }} namespace"
+  kubernetes.core.k8s:
+    state: "{{ state }}"
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ ansible_operator_meta.name }}"
+        namespace: "{{ ansible_operator_meta.name }}"
+
+        # We put the description in display-name because this shows up
+        # in the project list [1], although oddly enough it
+        # *doesn't* show up in the project detail page. Sometimes
+        # you just can't win.
+        #
+        # [1]: https://console-openshift-console.apps.ocp-prod.massopen.cloud/k8s/cluster/projects
+        annotations:
+          openshift.io/requester: "{{ requester }}"
+          openshift.io/display-name: "{{ description|default(omit) }}"
+        labels:
+          massopen.cloud/project: "{{ ansible_operator_meta.name }}"
+
+- name: "{{ ansible_operator_meta.name }} : {{ op }} groups"
+  kubernetes.core.k8s:
+    state: "{{ state }}"
+    definition:
+      apiVersion: user.openshift.io/v1
+      kind: Group
+      metadata:
+        name: "{{ ansible_operator_meta.name }}-{{ role }}"
+        labels:
+          massopen.cloud/project: "{{ ansible_operator_meta.name }}"
+      users: "{{ rolemembers[role]|default([]) }}"
+  vars:
+    rolemembers:
+      admin: "{{ admins | default([]) }}"
+      member: "{{ members | default([]) }}"
+      reader: "{{ readers | default([]) }}"
+  loop_control:
+    loop_var: role
+  loop:
+    - admin
+    - member
+    - reader
+
+- name: "{{ ansible_operator_meta.name }} : {{ op }} rolebindings"
+  kubernetes.core.k8s:
+    state: "{{ state }}"
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: RoleBinding
+      metadata:
+        name: "{{ ansible_operator_meta.name }}-{{ role }}"
+        namespace: "{{ ansible_operator_meta.name }}"
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: "{{ project_role_map[role] }}"
+      subjects:
+        - apiGroup: rbac.authorization.k8s.io
+          kind: Group
+          name: "{{ ansible_operator_meta.name }}-{{ role }}"
+  loop_control:
+    loop_var: role
+  loop: "{{ project_role_map.keys()|list }}"

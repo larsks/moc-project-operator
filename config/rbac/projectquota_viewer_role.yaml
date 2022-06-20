@@ -1,0 +1,20 @@
+# permissions for end users to view projectquota.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: projectquota-viewer-role
+rules:
+- apiGroups:
+  - project.oddbit.com
+  resources:
+  - projectquota
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - project.oddbit.com
+  resources:
+  - projectquota/status
+  verbs:
+  - get

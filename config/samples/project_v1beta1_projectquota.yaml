@@ -1,0 +1,6 @@
+apiVersion: project.oddbit.com/v1beta1
+kind: ProjectQuota
+metadata:
+  name: projectquota-sample
+spec:
+  # TODO(user): Add fields here

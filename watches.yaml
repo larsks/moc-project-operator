@@ -1,0 +1,15 @@
+---
+# Use the 'create api' subcommand to add watches to this file.
+- version: v1beta1
+  group: project.oddbit.com
+  kind: ProjectDefinition
+  playbook: playbooks/projectdefinition.yml
+  finalizer:
+    name: project.oddbit.com/finalizer
+    vars:
+      state: absent
+- version: v1beta1
+  group: project.oddbit.com
+  kind: ProjectQuota
+  playbook: playbooks/projectquota.yml
+#+kubebuilder:scaffold:watch

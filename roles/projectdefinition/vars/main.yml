@@ -1,0 +1,15 @@
+---
+# vars file for ProjectDefinition
+
+# This maps role names use to role names that OpenShift uses.
+project_role_map:
+  admin: admin
+  member: edit
+  reader: view
+
+# This maps a role name to the corresponding attribute in
+# the project definition.
+project_member_attr:
+  admin: admins
+  member: users
+  reader: readers

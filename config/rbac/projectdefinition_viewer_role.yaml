@@ -1,0 +1,20 @@
+# permissions for end users to view projectdefinitions.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: projectdefinition-viewer-role
+rules:
+- apiGroups:
+  - project.oddbit.com
+  resources:
+  - projectdefinitions
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - project.oddbit.com
+  resources:
+  - projectdefinitions/status
+  verbs:
+  - get
