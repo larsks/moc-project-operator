@@ -1,20 +1,32 @@
 ---
-# tasks file for ProjectQuota
-- name: Calculate content_hash
+- name: Set quotadef
   set_fact:
-    content_hash: "{{ quotadef|to_json|hash('sha256') }}"
-  vars:
     quotadef:
       q: "{{ resource_quota|default({}) }}"
       l: "{{ limit_range|default({}) }}"
 
-- name: Lookup up affected namespaces
+- name: Calculate content_hash
+  set_fact:
+    content_hash: "{{ quotadef|to_json|hash('sha256') }}"
+
+- name: Look up affected namespaces
   kubernetes.core.k8s_info:
     api_version: v1
     kind: namespace
     label_selectors:
       - "massopen.cloud/named-quota = {{ ansible_operator_meta.name }}"
   register: namespaces
+
+- name: Look up project definition
+  kubernetes.core.k8s_info:
+    api_version: "{{ apiVersion }}"
+    kind: projectdefinition
+    name: "{{ namespace.metadata.name }}"
+  register: projectdefs
+  loop: "{{ namespaces.resources }}"
+  loop_control:
+    loop_var: namespace
+    label: "{{ namespace.metadata.name }}"
 
 - name: Update namespaces
   kubernetes.core.k8s:
@@ -27,7 +39,11 @@
         annotations:
           massopen.cloud/named-quota: "{{ ansible_operator_meta.name }}"
           massopen.cloud/named-quota-hash: "{{ content_hash }}"
-  loop: "{{ namespaces.resources }}"
+  when: >-
+    item[1].resources|length == 1 and
+    item[1].resources[0].spec.quota.quotaName|default("") == ansible_operator_meta.name
+  vars:
+    namespace: "{{ item[0] }}"
+  loop: "{{ namespaces.resources|zip(projectdefs.results)|list }}"
   loop_control:
-    loop_var: namespace
-    label: "{{ namespace.metadata.name }}"
+    label: "{{ item[0].metadata.name }}"

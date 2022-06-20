@@ -1,0 +1,29 @@
+- name: "{{ ansible_operator_meta.name }} : apply resourcequota"
+  when: >-
+    "resourceQuota" in quotadef
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ResourceQuota
+      metadata:
+        name: "default"
+        namespace: "{{ ansible_operator_meta.name }}"
+        labels:
+          massopen.cloud/project: "{{ ansible_operator_meta.name }}"
+      spec: "{{ quotadef.resourceQuota }}"
+
+- name: "{{ ansible_operator_meta.name }} : apply limitrange"
+  when: >-
+    "limitRange" in quotadef
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: LimitRange
+      metadata:
+        name: "default"
+        namespace: "{{ ansible_operator_meta.name }}"
+        labels:
+          massopen.cloud/project: "{{ ansible_operator_meta.name }}"
+      spec: "{{ quotadef.limitRange }}"

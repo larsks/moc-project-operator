@@ -7,7 +7,6 @@
       kind: Namespace
       metadata:
         name: "{{ ansible_operator_meta.name }}"
-        namespace: "{{ ansible_operator_meta.name }}"
 
         # We put the description in display-name because this shows up
         # in the project list [1], although oddly enough it
@@ -42,6 +41,12 @@
     loop_var: role
   loop: "{{ project_role_map.keys()|list }}"
 
+- name: "{{ ansible_operator_meta.name }} : check for multiple quotas"
+  when: >-
+    quota.quota_name|default(false) and quota.quota_definition|default(false)
+  fail:
+    msg: "Only set one of quota.quotaName and quota.quotaDefinition"
+
 - name: "{{ ansible_operator_meta.name }} : handle named quota"
   when: >-
     quota.quota_name|default(false)
@@ -65,41 +70,33 @@
             labels:
               massopen.cloud/named-quota: "{{ quota.quota_name }}"
 
-    - name: "{{ ansible_operator_meta.name }} : apply resourcequota"
-      when: >-
-        "resourceQuota" in named_quota.resources[0].spec
-      kubernetes.core.k8s:
-        state: present
-        definition:
-          apiVersion: v1
-          kind: ResourceQuota
-          metadata:
-            name: "default"
-            namespace: "{{ ansible_operator_meta.name }}"
-            labels:
-              massopen.cloud/project: "{{ ansible_operator_meta.name }}"
-          spec: "{{ named_quota.resources[0].spec.resourceQuota }}"
+    - name: "{{ ansible_operator_meta.name }} : apply quota definition"
+      include_tasks: apply-quota.yaml
+      vars:
+        quotadef: "{{ named_quota.resources[0].spec }}"
 
-    - name: "{{ ansible_operator_meta.name }} : apply limitrange"
-      when: >-
-        "limitRange" in named_quota.resources[0].spec
-      kubernetes.core.k8s:
-        state: present
-        definition:
-          apiVersion: v1
-          kind: LimitRange
-          metadata:
-            name: "default"
-            namespace: "{{ ansible_operator_meta.name }}"
-            labels:
-              massopen.cloud/project: "{{ ansible_operator_meta.name }}"
-          spec: "{{ named_quota.resources[0].spec.limitRange }}"
-
-- name: "{{ ansible_operator_meta.name }} : create custom quota"
+- name: "{{ ansible_operator_meta.name }} : handle custom quota"
   when: >-
-    quota.quotaDefinition|default(false)
-  debug:
-    msg: "Handle custom quota"
+    quota.quota_definition|default(false)
+  block:
+    - name: "{{ ansible_operator_meta.name }} : remove quota label"
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ ansible_operator_meta.name }}"
+            annotations:
+              massopen.cloud/named-quota: null
+              massopen.cloud/named-quota-hash: null
+
+    - name: "{{ ansible_operator_meta.name }} : apply quota definition"
+      include_tasks: apply-quota.yaml
+      vars:
+        quotadef:
+          resourceQuota: "{{ quota.quota_definition.resource_quota|default({}) }}"
+          limitRange: "{{ quota.quota_definition.limit_range|default({}) }}"
 
 - name: "{{ ansible_operator_meta.name }} : create groups"
   kubernetes.core.k8s:
