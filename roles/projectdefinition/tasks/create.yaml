@@ -1,4 +1,7 @@
----
+# Create a new project namespace and associated resources (groups,
+# rolebindings, quotas).
+#
+
 - name: "{{ ansible_operator_meta.name }} : create namespace"
   kubernetes.core.k8s:
     state: present
@@ -41,6 +44,9 @@
     loop_var: role
   loop: "{{ project_role_map.keys()|list }}"
 
+# This is here because I haven't been able to figure out how to declare
+# mutually exclusive options in the OpenAPI v3 schema (see e.g.
+# https://stackoverflow.com/q/72690407/147356).
 - name: "{{ ansible_operator_meta.name }} : check for multiple quotas"
   when: >-
     quota.quota_name|default(false) and quota.quota_definition|default(false)
@@ -58,6 +64,11 @@
         name: "{{ quota.quota_name }}"
       register: named_quota
 
+    - name: "{{ ansible_operator_meta.name }} : assert that quota exists"
+      assert:
+        that: named_quota.resources|length == 1
+        fail_msg: "No quotaa named {{quota.quota_name}}"
+
     - name: "{{ ansible_operator_meta.name }} : label namespace"
       kubernetes.core.k8s:
         state: present
@@ -70,6 +81,8 @@
             labels:
               massopen.cloud/named-quota: "{{ quota.quota_name }}"
 
+    # Pass the spec from the ProjectQuota (which may contain both a
+    # resourceQuota and a limitRange definition) to the apply-quota task list.
     - name: "{{ ansible_operator_meta.name }} : apply quota definition"
       include_tasks: apply-quota.yaml
       vars:
@@ -94,6 +107,11 @@
     - name: "{{ ansible_operator_meta.name }} : apply quota definition"
       include_tasks: apply-quota.yaml
       vars:
+        # The ansible operator, for unknown reasons, likes to map camelCase
+        # names to snake_case names [1], so we need to map them *back*
+        # so that our quota definition has the expected keys.
+        #
+        # [1]: https://github.com/operator-framework/operator-sdk/issues/5887
         quotadef:
           resourceQuota: "{{ quota.quota_definition.resource_quota|default({}) }}"
           limitRange: "{{ quota.quota_definition.limit_range|default({}) }}"

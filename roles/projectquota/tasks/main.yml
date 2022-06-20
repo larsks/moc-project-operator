@@ -1,14 +1,20 @@
----
-- name: Set quotadef
+# Respond to modifications to ProjectQuota resources.
+#
+
+# In order to trigger a reconcile of the associated project, we annotate
+# the target namespace with the hash of the quota definition. This triggers
+# a reconcile because of the ownerReference on the namespace, which then
+# re-applies any quotas to the namespace.
+- name: Calculate content_hash
   set_fact:
+    content_hash: "{{ quotadef|to_json|hash('sha256') }}"
+  vars:
     quotadef:
       q: "{{ resource_quota|default({}) }}"
       l: "{{ limit_range|default({}) }}"
 
-- name: Calculate content_hash
-  set_fact:
-    content_hash: "{{ quotadef|to_json|hash('sha256') }}"
-
+# We look for namespaces that have massopen.cloud/named-quota set
+# to the name of the ProjectQuota we're currently processing.
 - name: Look up affected namespaces
   kubernetes.core.k8s_info:
     api_version: v1
@@ -39,6 +45,11 @@
         annotations:
           massopen.cloud/named-quota: "{{ ansible_operator_meta.name }}"
           massopen.cloud/named-quota-hash: "{{ content_hash }}"
+
+  # Ensure both that (a) we found a ProjectDefinition matching the namespace
+  # name, and that (b) that ProjectDefinition is configured to use the
+  # ProjectQuota that triggered this Ansible run. This prevents us from accidentally
+  # re-applying a named quota just because a label wasn't deleted correctly.
   when: >-
     item[1].resources|length == 1 and
     item[1].resources[0].spec.quota.quotaName|default("") == ansible_operator_meta.name

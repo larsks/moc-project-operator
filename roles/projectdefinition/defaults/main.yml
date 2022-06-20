@@ -1,3 +1,5 @@
 ---
 # defaults file for ProjectDefinition
 state: present
+quota_name: default
+limitrange_name: default

@@ -1,5 +1,6 @@
----
-# tasks file for ProjectDefinition
+# Select task list based on `state` variable. This allows us to use
+# different logic for create and delete operations.
+#
 
 - name: "{{ ansible_operator_meta.name }} : create project"
   include_tasks: create.yaml

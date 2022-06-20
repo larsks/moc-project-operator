@@ -1,3 +1,7 @@
+# This is used by the named quota and custom quota handling tasks to apply
+# a given resourcequota and limitrange to a namespace.
+#
+
 - name: "{{ ansible_operator_meta.name }} : apply resourcequota"
   when: >-
     "resourceQuota" in quotadef
@@ -7,7 +11,7 @@
       apiVersion: v1
       kind: ResourceQuota
       metadata:
-        name: "default"
+        name: "{{ quota_name }}"
         namespace: "{{ ansible_operator_meta.name }}"
         labels:
           massopen.cloud/project: "{{ ansible_operator_meta.name }}"
@@ -22,7 +26,7 @@
       apiVersion: v1
       kind: LimitRange
       metadata:
-        name: "default"
+        name: "{{ limitrange_name }}"
         namespace: "{{ ansible_operator_meta.name }}"
         labels:
           massopen.cloud/project: "{{ ansible_operator_meta.name }}"
