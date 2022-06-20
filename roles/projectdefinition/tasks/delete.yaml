@@ -1,0 +1,14 @@
+---
+- name: "{{ ansible_operator_meta.name }} : delete groups"
+  kubernetes.core.k8s:
+    state: absent
+    definition:
+      apiVersion: user.openshift.io/v1
+      kind: Group
+      metadata:
+        name: "{{ ansible_operator_meta.name }}-{{ role }}"
+        labels:
+          massopen.cloud/project: "{{ ansible_operator_meta.name }}"
+  loop_control:
+    loop_var: role
+  loop: "{{ project_role_map.keys()|list }}"
