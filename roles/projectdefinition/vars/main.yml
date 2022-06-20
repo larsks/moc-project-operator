@@ -1,6 +1,8 @@
 ---
 # vars file for ProjectDefinition
 
+apiVersion: project.oddbit.com/v1beta1
+
 # This maps role names use to role names that OpenShift uses.
 project_role_map:
   admin: admin

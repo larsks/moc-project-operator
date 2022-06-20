@@ -1,2 +1,33 @@
 ---
 # tasks file for ProjectQuota
+- name: Calculate content_hash
+  set_fact:
+    content_hash: "{{ quotadef|to_json|hash('sha256') }}"
+  vars:
+    quotadef:
+      q: "{{ resource_quota|default({}) }}"
+      l: "{{ limit_range|default({}) }}"
+
+- name: Lookup up affected namespaces
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: namespace
+    label_selectors:
+      - "massopen.cloud/named-quota = {{ ansible_operator_meta.name }}"
+  register: namespaces
+
+- name: Update namespaces
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ namespace.metadata.name }}"
+        annotations:
+          massopen.cloud/named-quota: "{{ ansible_operator_meta.name }}"
+          massopen.cloud/named-quota-hash: "{{ content_hash }}"
+  loop: "{{ namespaces.resources }}"
+  loop_control:
+    loop_var: namespace
+    label: "{{ namespace.metadata.name }}"

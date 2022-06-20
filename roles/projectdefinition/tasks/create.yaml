@@ -21,26 +21,6 @@
         labels:
           massopen.cloud/project: "{{ ansible_operator_meta.name }}"
 
-- name: "{{ ansible_operator_meta.name }} : create groups"
-  kubernetes.core.k8s:
-    state: present
-    definition:
-      apiVersion: user.openshift.io/v1
-      kind: Group
-      metadata:
-        name: "{{ ansible_operator_meta.name }}-{{ role }}"
-        labels:
-          massopen.cloud/project: "{{ ansible_operator_meta.name }}"
-      users: "{{ rolemembers[role]|default([]) }}"
-  vars:
-    rolemembers:
-      admin: "{{ admins | default([]) }}"
-      member: "{{ members | default([]) }}"
-      reader: "{{ readers | default([]) }}"
-  loop_control:
-    loop_var: role
-  loop: "{{ project_role_map.keys()|list }}"
-
 - name: "{{ ansible_operator_meta.name }} : create rolebindings"
   kubernetes.core.k8s:
     state: present
@@ -58,6 +38,85 @@
         - apiGroup: rbac.authorization.k8s.io
           kind: Group
           name: "{{ ansible_operator_meta.name }}-{{ role }}"
+  loop_control:
+    loop_var: role
+  loop: "{{ project_role_map.keys()|list }}"
+
+- name: "{{ ansible_operator_meta.name }} : handle named quota"
+  when: >-
+    quota.quota_name|default(false)
+  block:
+    - name: "{{ ansible_operator_meta.name }} : look up named quota"
+      kubernetes.core.k8s_info:
+        api_version: "{{ apiVersion }}"
+        kind: ProjectQuota
+        name: "{{ quota.quota_name }}"
+      register: named_quota
+
+    - name: "{{ ansible_operator_meta.name }} : label namespace"
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ ansible_operator_meta.name }}"
+            namespace: "{{ ansible_operator_meta.name }}"
+            labels:
+              massopen.cloud/named-quota: "{{ quota.quota_name }}"
+
+    - name: "{{ ansible_operator_meta.name }} : apply resourcequota"
+      when: >-
+        "resourceQuota" in named_quota.resources[0].spec
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: ResourceQuota
+          metadata:
+            name: "default"
+            namespace: "{{ ansible_operator_meta.name }}"
+            labels:
+              massopen.cloud/project: "{{ ansible_operator_meta.name }}"
+          spec: "{{ named_quota.resources[0].spec.resourceQuota }}"
+
+    - name: "{{ ansible_operator_meta.name }} : apply limitrange"
+      when: >-
+        "limitRange" in named_quota.resources[0].spec
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: LimitRange
+          metadata:
+            name: "default"
+            namespace: "{{ ansible_operator_meta.name }}"
+            labels:
+              massopen.cloud/project: "{{ ansible_operator_meta.name }}"
+          spec: "{{ named_quota.resources[0].spec.limitRange }}"
+
+- name: "{{ ansible_operator_meta.name }} : create custom quota"
+  when: >-
+    quota.quotaDefinition|default(false)
+  debug:
+    msg: "Handle custom quota"
+
+- name: "{{ ansible_operator_meta.name }} : create groups"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: user.openshift.io/v1
+      kind: Group
+      metadata:
+        name: "{{ ansible_operator_meta.name }}-{{ role }}"
+        labels:
+          massopen.cloud/project: "{{ ansible_operator_meta.name }}"
+      users: "{{ rolemembers[role]|default([]) }}"
+  vars:
+    rolemembers:
+      admin: "{{ admins | default([]) }}"
+      member: "{{ members | default([]) }}"
+      reader: "{{ readers | default([]) }}"
   loop_control:
     loop_var: role
   loop: "{{ project_role_map.keys()|list }}"
