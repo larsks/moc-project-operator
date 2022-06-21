@@ -4,6 +4,7 @@
   group: project.oddbit.com
   kind: ProjectDefinition
   playbook: playbooks/projectdefinition.yml
+  snakeCaseParameters: false
   finalizer:
     name: project.oddbit.com/finalizer
     vars:
@@ -12,4 +13,5 @@
   group: project.oddbit.com
   kind: ProjectQuota
   playbook: playbooks/projectquota.yml
+  snakeCaseParameters: false
 #+kubebuilder:scaffold:watch

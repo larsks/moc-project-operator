@@ -10,8 +10,8 @@
     content_hash: "{{ quotadef|to_json|hash('sha256') }}"
   vars:
     quotadef:
-      q: "{{ resource_quota|default({}) }}"
-      l: "{{ limit_range|default({}) }}"
+      q: "{{ resourceQuota|default({}) }}"
+      l: "{{ limitRange|default({}) }}"
 
 # We look for namespaces that have massopen.cloud/named-quota set
 # to the name of the ProjectQuota we're currently processing.

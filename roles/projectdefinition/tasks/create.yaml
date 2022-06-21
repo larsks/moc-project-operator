@@ -49,25 +49,25 @@
 # https://stackoverflow.com/q/72690407/147356).
 - name: "{{ ansible_operator_meta.name }} : check for multiple quotas"
   when: >-
-    quota.quota_name|default(false) and quota.quota_definition|default(false)
+    quota.quotaName|default(false) and quota.quotaDefinition|default(false)
   fail:
     msg: "Only set one of quota.quotaName and quota.quotaDefinition"
 
 - name: "{{ ansible_operator_meta.name }} : handle named quota"
   when: >-
-    quota.quota_name|default(false)
+    quota.quotaName|default(false)
   block:
     - name: "{{ ansible_operator_meta.name }} : look up named quota"
       kubernetes.core.k8s_info:
         api_version: "{{ apiVersion }}"
         kind: ProjectQuota
-        name: "{{ quota.quota_name }}"
+        name: "{{ quota.quotaName }}"
       register: named_quota
 
     - name: "{{ ansible_operator_meta.name }} : assert that quota exists"
       assert:
         that: named_quota.resources|length == 1
-        fail_msg: "No quotaa named {{quota.quota_name}}"
+        fail_msg: "No quotaa named {{quota.quotaName}}"
 
     - name: "{{ ansible_operator_meta.name }} : label namespace"
       kubernetes.core.k8s:
@@ -79,7 +79,7 @@
             name: "{{ ansible_operator_meta.name }}"
             namespace: "{{ ansible_operator_meta.name }}"
             labels:
-              massopen.cloud/named-quota: "{{ quota.quota_name }}"
+              massopen.cloud/named-quota: "{{ quota.quotaName }}"
 
     # Pass the spec from the ProjectQuota (which may contain both a
     # resourceQuota and a limitRange definition) to the apply-quota task list.
@@ -90,7 +90,7 @@
 
 - name: "{{ ansible_operator_meta.name }} : handle custom quota"
   when: >-
-    quota.quota_definition|default(false)
+    quota.quotaDefinition|default(false)
   block:
     - name: "{{ ansible_operator_meta.name }} : remove quota label"
       kubernetes.core.k8s:
@@ -112,9 +112,7 @@
         # so that our quota definition has the expected keys.
         #
         # [1]: https://github.com/operator-framework/operator-sdk/issues/5887
-        quotadef:
-          resourceQuota: "{{ quota.quota_definition.resource_quota|default({}) }}"
-          limitRange: "{{ quota.quota_definition.limit_range|default({}) }}"
+        quotadef: "{{ quota.quotaDefinition }}"
 
 - name: "{{ ansible_operator_meta.name }} : create groups"
   kubernetes.core.k8s:
