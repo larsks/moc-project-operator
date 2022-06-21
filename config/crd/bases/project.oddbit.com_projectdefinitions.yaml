@@ -40,16 +40,20 @@ spec:
                 type: string
               requester:
                 type: string
+                description: Email address of the person who requested this project
               admins:
                 type: array
+                description: A list of users who will have admin access
                 items:
                   type: string
               members:
                 type: array
+                description: A list of users who will have write access
                 items:
                   type: string
               readers:
                 type: array
+                description: A list of users who will have read-only access
                 items:
                   type: string
               quota:
@@ -57,14 +61,18 @@ spec:
                 properties:
                   quotaName:
                     type: string
+                    description: The name of an existing ProjectQuota resource
                   quotaDefinition:
                     type: object
+                    description: A custom quota definition.
                     properties:
                       resourceQuota:
                         type: object
+                        description: A ResourceQuota definition (the contents of ResourceQuota.spec)
                         x-kubernetes-preserve-unknown-fields: true
                       limitRange:
                         type: object
+                        description: A LimitRange definition (the contents of LimitRange.spec)
                         x-kubernetes-preserve-unknown-fields: true
             required:
               - requester

@@ -32,7 +32,18 @@ spec:
           spec:
             description: Spec defines the desired state of ProjectQuota
             type: object
-            x-kubernetes-preserve-unknown-fields: true
+            properties:
+              description:
+                type: string
+                description: A description of this quota.
+              resourceQuota:
+                type: object
+                description: A ResourceQuota definition (the contents of ResourceQuota.spec)
+                x-kubernetes-preserve-unknown-fields: true
+              limitRange:
+                type: object
+                description: A LimitRange definition (the contents of LimitRange.spec)
+                x-kubernetes-preserve-unknown-fields: true
           status:
             description: Status defines the observed state of ProjectQuota
             type: object
