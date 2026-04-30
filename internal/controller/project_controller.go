@@ -69,6 +69,9 @@ func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if err := r.reconcileLimitRange(ctx, project); err != nil {
 		return ctrl.Result{}, err
 	}
+	if err := r.reconcileResourceQuota(ctx, project); err != nil {
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -123,6 +126,23 @@ func (r *ProjectReconciler) reconcileRoleBinding(ctx context.Context, project *p
 				Kind:     "Group",
 				Name:     project.Name,
 			},
+		}
+		return nil
+	})
+	return err
+}
+
+func (r *ProjectReconciler) reconcileResourceQuota(ctx context.Context, project *projectmassopencloudv1alpha1.Project) error {
+	rq := &corev1.ResourceQuota{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      project.Name,
+			Namespace: project.Name,
+		},
+	}
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, rq, func() error {
+		rq.Spec.Hard = make(corev1.ResourceList, len(project.Spec.Quotas))
+		for k, v := range project.Spec.Quotas {
+			rq.Spec.Hard[corev1.ResourceName(k)] = v
 		}
 		return nil
 	})

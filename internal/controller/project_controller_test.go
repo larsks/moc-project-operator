@@ -45,6 +45,10 @@ var _ = Describe("Project Controller", func() {
 						},
 					},
 				},
+				Quotas: map[string]resource.Quantity{
+					"cpu":    resource.MustParse("4"),
+					"memory": resource.MustParse("8Gi"),
+				},
 			},
 		}
 		err := k8sClient.Get(ctx, typeNamespacedName, &projectmassopencloudv1alpha1.Project{})
@@ -151,6 +155,19 @@ var _ = Describe("Project Controller", func() {
 			Expect(lr.Spec.Limits).To(HaveLen(1))
 			Expect(lr.Spec.Limits[0].Type).To(Equal(corev1.LimitTypeContainer))
 			Expect(lr.Spec.Limits[0].Default).To(HaveKeyWithValue(corev1.ResourceCPU, resource.MustParse("500m")))
+		})
+
+		It("should create a resourcequota with the project quotas", func() {
+			reconcileProject()
+
+			rq := &corev1.ResourceQuota{}
+			err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      projectName,
+				Namespace: projectName,
+			}, rq)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(rq.Spec.Hard).To(HaveKeyWithValue(corev1.ResourceName("cpu"), resource.MustParse("4")))
+			Expect(rq.Spec.Hard).To(HaveKeyWithValue(corev1.ResourceName("memory"), resource.MustParse("8Gi")))
 		})
 	})
 })
