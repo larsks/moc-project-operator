@@ -6,7 +6,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -20,6 +22,12 @@ const (
 	labelProjectName    = "project.massopen.cloud/name"
 	labelProjectDeleted = "project.massopen.cloud/deleted"
 )
+
+var groupGVK = schema.GroupVersionKind{
+	Group:   "user.openshift.io",
+	Version: "v1",
+	Kind:    "Group",
+}
 
 type ProjectReconciler struct {
 	client.Client
@@ -51,6 +59,9 @@ func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if err := r.reconcileNamespace(ctx, project); err != nil {
 		return ctrl.Result{}, err
 	}
+	if err := r.reconcileGroup(ctx, project); err != nil {
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -66,6 +77,21 @@ func (r *ProjectReconciler) reconcileNamespace(ctx context.Context, project *pro
 			ns.Labels = make(map[string]string)
 		}
 		ns.Labels[labelProjectName] = project.Name
+		return nil
+	})
+	return err
+}
+
+func (r *ProjectReconciler) reconcileGroup(ctx context.Context, project *projectmassopencloudv1alpha1.Project) error {
+	group := &unstructured.Unstructured{}
+	group.SetGroupVersionKind(groupGVK)
+	group.SetName(project.Name)
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, group, func() error {
+		users := make([]any, len(project.Spec.Members))
+		for i, m := range project.Spec.Members {
+			users[i] = m
+		}
+		group.Object["users"] = users
 		return nil
 	})
 	return err

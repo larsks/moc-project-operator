@@ -8,6 +8,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -54,6 +56,18 @@ var _ = Describe("Project Controller", func() {
 		if err == nil {
 			Expect(k8sClient.Delete(ctx, ns)).To(Succeed())
 		}
+
+		group := &unstructured.Unstructured{}
+		group.SetGroupVersionKind(schema.GroupVersionKind{
+			Group:   "user.openshift.io",
+			Version: "v1",
+			Kind:    "Group",
+		})
+		group.SetName(projectName)
+		err = k8sClient.Delete(ctx, group)
+		if err != nil && !errors.IsNotFound(err) {
+			Expect(err).NotTo(HaveOccurred())
+		}
 	})
 
 	reconcileProject := func() {
@@ -73,6 +87,24 @@ var _ = Describe("Project Controller", func() {
 			err := k8sClient.Get(ctx, types.NamespacedName{Name: projectName}, ns)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ns.Labels).To(HaveKeyWithValue("project.massopen.cloud/name", projectName))
+		})
+
+		It("should create a group with the project members", func() {
+			reconcileProject()
+
+			group := &unstructured.Unstructured{}
+			group.SetGroupVersionKind(schema.GroupVersionKind{
+				Group:   "user.openshift.io",
+				Version: "v1",
+				Kind:    "Group",
+			})
+			err := k8sClient.Get(ctx, types.NamespacedName{Name: projectName}, group)
+			Expect(err).NotTo(HaveOccurred())
+
+			users, found, err := unstructured.NestedStringSlice(group.Object, "users")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeTrue())
+			Expect(users).To(ConsistOf("user1", "user2"))
 		})
 	})
 })
