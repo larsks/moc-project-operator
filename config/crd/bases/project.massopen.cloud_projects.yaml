@@ -40,14 +40,19 @@ spec:
             description: ProjectSpec defines the desired state of Project.
             properties:
               deleteAction:
+                description: deleteAction determines what happens to project resources
+                  when the Project resource is deleted.
                 enum:
                 - Ignore
                 - Preserve
                 - Delete
                 type: string
               displayName:
+                description: displayName is human-friendly name for this project
                 type: string
               limits:
+                description: limits sets a default limitrange for this project (see
+                  LimitRange.spec.limits)
                 items:
                   description: LimitRangeItem defines a min/max usage limit for any
                     resource that matches on kind.
@@ -112,6 +117,7 @@ spec:
                   type: object
                 type: array
               members:
+                description: members is a list of users that are members of this project
                 items:
                   type: string
                 type: array
@@ -122,6 +128,7 @@ spec:
                   - type: string
                   pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                   x-kubernetes-int-or-string: true
+                description: quotas sets default quotas for this project (see ResourceQuota.spec.hard)
                 type: object
             type: object
           status:

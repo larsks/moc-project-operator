@@ -24,11 +24,20 @@ import (
 
 // ProjectSpec defines the desired state of Project.
 type ProjectSpec struct {
-	DisplayName  string                       `json:"displayName,omitempty"`
-	Members      []string                     `json:"members,omitempty"`
-	Quotas       map[string]resource.Quantity `json:"quotas,omitempty"`
-	Limits       []corev1.LimitRangeItem      `json:"limits,omitempty"`
-	DeleteAction DeleteAction                 `json:"deleteAction,omitempty"`
+	// displayName is human-friendly name for this project
+	DisplayName string `json:"displayName,omitempty"`
+
+	// members is a list of users that are members of this project
+	Members []string `json:"members,omitempty"`
+
+	// quotas sets default quotas for this project (see ResourceQuota.spec.hard)
+	Quotas map[string]resource.Quantity `json:"quotas,omitempty"`
+
+	// limits sets a default limitrange for this project (see LimitRange.spec.limits)
+	Limits []corev1.LimitRangeItem `json:"limits,omitempty"`
+
+	// deleteAction determines what happens to project resources when the Project resource is deleted.
+	DeleteAction DeleteAction `json:"deleteAction,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Ignore;Preserve;Delete
