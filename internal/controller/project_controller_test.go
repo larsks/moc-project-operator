@@ -6,6 +6,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -105,6 +106,27 @@ var _ = Describe("Project Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(found).To(BeTrue())
 			Expect(users).To(ConsistOf("user1", "user2"))
+		})
+
+		It("should create a rolebinding mapping the group to the edit role", func() {
+			reconcileProject()
+
+			rb := &rbacv1.RoleBinding{}
+			err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      projectName,
+				Namespace: projectName,
+			}, rb)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(rb.RoleRef).To(Equal(rbacv1.RoleRef{
+				APIGroup: "rbac.authorization.k8s.io",
+				Kind:     "ClusterRole",
+				Name:     "edit",
+			}))
+			Expect(rb.Subjects).To(ContainElement(rbacv1.Subject{
+				APIGroup: "rbac.authorization.k8s.io",
+				Kind:     "Group",
+				Name:     projectName,
+			}))
 		})
 	})
 })

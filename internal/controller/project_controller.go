@@ -4,6 +4,7 @@ import (
 	"context"
 
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -62,6 +63,9 @@ func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if err := r.reconcileGroup(ctx, project); err != nil {
 		return ctrl.Result{}, err
 	}
+	if err := r.reconcileRoleBinding(ctx, project); err != nil {
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -92,6 +96,31 @@ func (r *ProjectReconciler) reconcileGroup(ctx context.Context, project *project
 			users[i] = m
 		}
 		group.Object["users"] = users
+		return nil
+	})
+	return err
+}
+
+func (r *ProjectReconciler) reconcileRoleBinding(ctx context.Context, project *projectmassopencloudv1alpha1.Project) error {
+	rb := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      project.Name,
+			Namespace: project.Name,
+		},
+	}
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, rb, func() error {
+		rb.RoleRef = rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "ClusterRole",
+			Name:     "edit",
+		}
+		rb.Subjects = []rbacv1.Subject{
+			{
+				APIGroup: "rbac.authorization.k8s.io",
+				Kind:     "Group",
+				Name:     project.Name,
+			},
+		}
 		return nil
 	})
 	return err
