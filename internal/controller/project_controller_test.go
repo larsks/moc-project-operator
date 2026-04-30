@@ -28,63 +28,6 @@ var _ = Describe("Project Controller", func() {
 		Namespace: "default",
 	}
 
-	BeforeEach(func() {
-		project := &projectmassopencloudv1alpha1.Project{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      projectName,
-				Namespace: "default",
-			},
-			Spec: projectmassopencloudv1alpha1.ProjectSpec{
-				Members: []string{"user1", "user2"},
-				Limits: []corev1.LimitRangeItem{
-					{
-						Type: corev1.LimitTypeContainer,
-						Default: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("500m"),
-							corev1.ResourceMemory: resource.MustParse("512Mi"),
-						},
-					},
-				},
-				Quotas: map[string]resource.Quantity{
-					"cpu":    resource.MustParse("4"),
-					"memory": resource.MustParse("8Gi"),
-				},
-			},
-		}
-		err := k8sClient.Get(ctx, typeNamespacedName, &projectmassopencloudv1alpha1.Project{})
-		if errors.IsNotFound(err) {
-			Expect(k8sClient.Create(ctx, project)).To(Succeed())
-		}
-	})
-
-	AfterEach(func() {
-		project := &projectmassopencloudv1alpha1.Project{}
-		err := k8sClient.Get(ctx, typeNamespacedName, project)
-		if err == nil {
-			project.Finalizers = nil
-			Expect(k8sClient.Update(ctx, project)).To(Succeed())
-			Expect(k8sClient.Delete(ctx, project)).To(Succeed())
-		}
-
-		ns := &corev1.Namespace{}
-		err = k8sClient.Get(ctx, types.NamespacedName{Name: projectName}, ns)
-		if err == nil {
-			Expect(k8sClient.Delete(ctx, ns)).To(Succeed())
-		}
-
-		group := &unstructured.Unstructured{}
-		group.SetGroupVersionKind(schema.GroupVersionKind{
-			Group:   "user.openshift.io",
-			Version: "v1",
-			Kind:    "Group",
-		})
-		group.SetName(projectName)
-		err = k8sClient.Delete(ctx, group)
-		if err != nil && !errors.IsNotFound(err) {
-			Expect(err).NotTo(HaveOccurred())
-		}
-	})
-
 	reconcileProject := func() {
 		r := &ProjectReconciler{
 			Client: k8sClient,
@@ -95,6 +38,63 @@ var _ = Describe("Project Controller", func() {
 	}
 
 	Context("When reconciling a project", func() {
+		BeforeEach(func() {
+			project := &projectmassopencloudv1alpha1.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      projectName,
+					Namespace: "default",
+				},
+				Spec: projectmassopencloudv1alpha1.ProjectSpec{
+					Members: []string{"user1", "user2"},
+					Limits: []corev1.LimitRangeItem{
+						{
+							Type: corev1.LimitTypeContainer,
+							Default: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("500m"),
+								corev1.ResourceMemory: resource.MustParse("512Mi"),
+							},
+						},
+					},
+					Quotas: map[string]resource.Quantity{
+						"cpu":    resource.MustParse("4"),
+						"memory": resource.MustParse("8Gi"),
+					},
+				},
+			}
+			err := k8sClient.Get(ctx, typeNamespacedName, &projectmassopencloudv1alpha1.Project{})
+			if errors.IsNotFound(err) {
+				Expect(k8sClient.Create(ctx, project)).To(Succeed())
+			}
+		})
+
+		AfterEach(func() {
+			project := &projectmassopencloudv1alpha1.Project{}
+			err := k8sClient.Get(ctx, typeNamespacedName, project)
+			if err == nil {
+				project.Finalizers = nil
+				Expect(k8sClient.Update(ctx, project)).To(Succeed())
+				Expect(k8sClient.Delete(ctx, project)).To(Succeed())
+			}
+
+			ns := &corev1.Namespace{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: projectName}, ns)
+			if err == nil {
+				Expect(k8sClient.Delete(ctx, ns)).To(Succeed())
+			}
+
+			group := &unstructured.Unstructured{}
+			group.SetGroupVersionKind(schema.GroupVersionKind{
+				Group:   "user.openshift.io",
+				Version: "v1",
+				Kind:    "Group",
+			})
+			group.SetName(projectName)
+			err = k8sClient.Delete(ctx, group)
+			if err != nil && !errors.IsNotFound(err) {
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+
 		It("should create a namespace with the project name label", func() {
 			reconcileProject()
 
@@ -168,6 +168,171 @@ var _ = Describe("Project Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(rq.Spec.Hard).To(HaveKeyWithValue(corev1.ResourceName("cpu"), resource.MustParse("4")))
 			Expect(rq.Spec.Hard).To(HaveKeyWithValue(corev1.ResourceName("memory"), resource.MustParse("8Gi")))
+		})
+
+		It("should add a finalizer to the project", func() {
+			reconcileProject()
+
+			project := &projectmassopencloudv1alpha1.Project{}
+			err := k8sClient.Get(ctx, typeNamespacedName, project)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(project.Finalizers).To(ContainElement("project.massopen.cloud/finalizer"))
+		})
+	})
+
+	Context("When deleting a project with Ignore action", func() {
+		BeforeEach(func() {
+			project := &projectmassopencloudv1alpha1.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      projectName,
+					Namespace: "default",
+				},
+				Spec: projectmassopencloudv1alpha1.ProjectSpec{
+					Members:      []string{"user1"},
+					DeleteAction: projectmassopencloudv1alpha1.DeleteActionIgnore,
+				},
+			}
+			err := k8sClient.Get(ctx, typeNamespacedName, &projectmassopencloudv1alpha1.Project{})
+			if errors.IsNotFound(err) {
+				Expect(k8sClient.Create(ctx, project)).To(Succeed())
+			}
+			reconcileProject()
+		})
+
+		AfterEach(func() {
+			project := &projectmassopencloudv1alpha1.Project{}
+			err := k8sClient.Get(ctx, typeNamespacedName, project)
+			if err == nil {
+				project.Finalizers = nil
+				Expect(k8sClient.Update(ctx, project)).To(Succeed())
+				Expect(k8sClient.Delete(ctx, project)).To(Succeed())
+			}
+			ns := &corev1.Namespace{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: projectName}, ns)
+			if err == nil {
+				Expect(k8sClient.Delete(ctx, ns)).To(Succeed())
+			}
+			group := &unstructured.Unstructured{}
+			group.SetGroupVersionKind(groupGVK)
+			group.SetName(projectName)
+			_ = k8sClient.Delete(ctx, group)
+		})
+
+		It("should label the namespace as deleted and remove the finalizer", func() {
+			project := &projectmassopencloudv1alpha1.Project{}
+			Expect(k8sClient.Get(ctx, typeNamespacedName, project)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, project)).To(Succeed())
+			reconcileProject()
+
+			ns := &corev1.Namespace{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: projectName}, ns)).To(Succeed())
+			Expect(ns.Labels).To(HaveKeyWithValue("project.massopen.cloud/deleted", "true"))
+
+			group := &unstructured.Unstructured{}
+			group.SetGroupVersionKind(groupGVK)
+			err := k8sClient.Get(ctx, types.NamespacedName{Name: projectName}, group)
+			Expect(err).NotTo(HaveOccurred(), "group should still exist with Ignore action")
+		})
+	})
+
+	Context("When deleting a project with Preserve action", func() {
+		BeforeEach(func() {
+			project := &projectmassopencloudv1alpha1.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      projectName,
+					Namespace: "default",
+				},
+				Spec: projectmassopencloudv1alpha1.ProjectSpec{
+					Members:      []string{"user1"},
+					DeleteAction: projectmassopencloudv1alpha1.DeleteActionPreserve,
+				},
+			}
+			err := k8sClient.Get(ctx, typeNamespacedName, &projectmassopencloudv1alpha1.Project{})
+			if errors.IsNotFound(err) {
+				Expect(k8sClient.Create(ctx, project)).To(Succeed())
+			}
+			reconcileProject()
+		})
+
+		AfterEach(func() {
+			project := &projectmassopencloudv1alpha1.Project{}
+			err := k8sClient.Get(ctx, typeNamespacedName, project)
+			if err == nil {
+				project.Finalizers = nil
+				Expect(k8sClient.Update(ctx, project)).To(Succeed())
+				Expect(k8sClient.Delete(ctx, project)).To(Succeed())
+			}
+			ns := &corev1.Namespace{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: projectName}, ns)
+			if err == nil {
+				Expect(k8sClient.Delete(ctx, ns)).To(Succeed())
+			}
+			group := &unstructured.Unstructured{}
+			group.SetGroupVersionKind(groupGVK)
+			group.SetName(projectName)
+			_ = k8sClient.Delete(ctx, group)
+		})
+
+		It("should delete the group but keep the namespace", func() {
+			project := &projectmassopencloudv1alpha1.Project{}
+			Expect(k8sClient.Get(ctx, typeNamespacedName, project)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, project)).To(Succeed())
+			reconcileProject()
+
+			ns := &corev1.Namespace{}
+			err := k8sClient.Get(ctx, types.NamespacedName{Name: projectName}, ns)
+			Expect(err).NotTo(HaveOccurred(), "namespace should still exist with Preserve action")
+
+			group := &unstructured.Unstructured{}
+			group.SetGroupVersionKind(groupGVK)
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: projectName}, group)
+			Expect(errors.IsNotFound(err)).To(BeTrue(), "group should be deleted with Preserve action")
+		})
+	})
+
+	Context("When deleting a project with Delete action", func() {
+		BeforeEach(func() {
+			project := &projectmassopencloudv1alpha1.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      projectName,
+					Namespace: "default",
+				},
+				Spec: projectmassopencloudv1alpha1.ProjectSpec{
+					Members:      []string{"user1"},
+					DeleteAction: projectmassopencloudv1alpha1.DeleteActionDelete,
+				},
+			}
+			err := k8sClient.Get(ctx, typeNamespacedName, &projectmassopencloudv1alpha1.Project{})
+			if errors.IsNotFound(err) {
+				Expect(k8sClient.Create(ctx, project)).To(Succeed())
+			}
+			reconcileProject()
+		})
+
+		AfterEach(func() {
+			project := &projectmassopencloudv1alpha1.Project{}
+			err := k8sClient.Get(ctx, typeNamespacedName, project)
+			if err == nil {
+				project.Finalizers = nil
+				Expect(k8sClient.Update(ctx, project)).To(Succeed())
+				Expect(k8sClient.Delete(ctx, project)).To(Succeed())
+			}
+			group := &unstructured.Unstructured{}
+			group.SetGroupVersionKind(groupGVK)
+			group.SetName(projectName)
+			_ = k8sClient.Delete(ctx, group)
+		})
+
+		It("should delete the namespace and the group", func() {
+			project := &projectmassopencloudv1alpha1.Project{}
+			Expect(k8sClient.Get(ctx, typeNamespacedName, project)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, project)).To(Succeed())
+			reconcileProject()
+
+			group := &unstructured.Unstructured{}
+			group.SetGroupVersionKind(groupGVK)
+			err := k8sClient.Get(ctx, types.NamespacedName{Name: projectName}, group)
+			Expect(errors.IsNotFound(err)).To(BeTrue(), "group should be deleted with Delete action")
 		})
 	})
 })

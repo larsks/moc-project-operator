@@ -57,6 +57,17 @@ func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	log.Info("reconciling project", "name", project.Name)
 
+	if project.DeletionTimestamp != nil {
+		return r.handleDeletion(ctx, project)
+	}
+
+	if !controllerutil.ContainsFinalizer(project, finalizerName) {
+		controllerutil.AddFinalizer(project, finalizerName)
+		if err := r.Update(ctx, project); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
 	if err := r.reconcileNamespace(ctx, project); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -74,6 +85,72 @@ func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *ProjectReconciler) handleDeletion(ctx context.Context, project *projectmassopencloudv1alpha1.Project) (ctrl.Result, error) {
+	if !controllerutil.ContainsFinalizer(project, finalizerName) {
+		return ctrl.Result{}, nil
+	}
+
+	ns := &corev1.Namespace{}
+	if err := r.Get(ctx, client.ObjectKey{Name: project.Name}, ns); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return ctrl.Result{}, err
+		}
+	} else {
+		if ns.Labels == nil {
+			ns.Labels = make(map[string]string)
+		}
+		ns.Labels[labelProjectDeleted] = "true"
+		if err := r.Update(ctx, ns); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
+	switch project.Spec.DeleteAction {
+	case projectmassopencloudv1alpha1.DeleteActionIgnore:
+		// no additional cleanup
+	case projectmassopencloudv1alpha1.DeleteActionDelete:
+		if err := r.deleteGroup(ctx, project.Name); err != nil {
+			return ctrl.Result{}, err
+		}
+		if err := r.deleteNamespace(ctx, project.Name); err != nil {
+			return ctrl.Result{}, err
+		}
+	default:
+		if err := r.deleteGroup(ctx, project.Name); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
+	controllerutil.RemoveFinalizer(project, finalizerName)
+	if err := r.Update(ctx, project); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, nil
+}
+
+func (r *ProjectReconciler) deleteGroup(ctx context.Context, name string) error {
+	group := &unstructured.Unstructured{}
+	group.SetGroupVersionKind(groupGVK)
+	group.SetName(name)
+	if err := r.Delete(ctx, group); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	return nil
+}
+
+func (r *ProjectReconciler) deleteNamespace(ctx context.Context, name string) error {
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
+	if err := r.Delete(ctx, ns); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	return nil
 }
 
 func (r *ProjectReconciler) reconcileNamespace(ctx context.Context, project *projectmassopencloudv1alpha1.Project) error {
