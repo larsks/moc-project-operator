@@ -178,6 +178,27 @@ var _ = Describe("Project Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(project.Finalizers).To(ContainElement("project.massopen.cloud/finalizer"))
 		})
+
+		It("should update the group when members change", func() {
+			reconcileProject()
+
+			project := &projectmassopencloudv1alpha1.Project{}
+			Expect(k8sClient.Get(ctx, typeNamespacedName, project)).To(Succeed())
+			project.Spec.Members = []string{"user1", "user2", "user3"}
+			Expect(k8sClient.Update(ctx, project)).To(Succeed())
+
+			reconcileProject()
+
+			group := &unstructured.Unstructured{}
+			group.SetGroupVersionKind(groupGVK)
+			err := k8sClient.Get(ctx, types.NamespacedName{Name: projectName}, group)
+			Expect(err).NotTo(HaveOccurred())
+
+			users, found, err := unstructured.NestedStringSlice(group.Object, "users")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeTrue())
+			Expect(users).To(ConsistOf("user1", "user2", "user3"))
+		})
 	})
 
 	Context("When deleting a project with Ignore action", func() {
@@ -333,6 +354,60 @@ var _ = Describe("Project Controller", func() {
 			group.SetGroupVersionKind(groupGVK)
 			err := k8sClient.Get(ctx, types.NamespacedName{Name: projectName}, group)
 			Expect(errors.IsNotFound(err)).To(BeTrue(), "group should be deleted with Delete action")
+		})
+	})
+
+	Context("When deleting a project with no deleteAction set", func() {
+		BeforeEach(func() {
+			project := &projectmassopencloudv1alpha1.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      projectName,
+					Namespace: "default",
+				},
+				Spec: projectmassopencloudv1alpha1.ProjectSpec{
+					Members: []string{"user1"},
+				},
+			}
+			err := k8sClient.Get(ctx, typeNamespacedName, &projectmassopencloudv1alpha1.Project{})
+			if errors.IsNotFound(err) {
+				Expect(k8sClient.Create(ctx, project)).To(Succeed())
+			}
+			reconcileProject()
+		})
+
+		AfterEach(func() {
+			project := &projectmassopencloudv1alpha1.Project{}
+			err := k8sClient.Get(ctx, typeNamespacedName, project)
+			if err == nil {
+				project.Finalizers = nil
+				Expect(k8sClient.Update(ctx, project)).To(Succeed())
+				Expect(k8sClient.Delete(ctx, project)).To(Succeed())
+			}
+			ns := &corev1.Namespace{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: projectName}, ns)
+			if err == nil {
+				Expect(k8sClient.Delete(ctx, ns)).To(Succeed())
+			}
+			group := &unstructured.Unstructured{}
+			group.SetGroupVersionKind(groupGVK)
+			group.SetName(projectName)
+			_ = k8sClient.Delete(ctx, group)
+		})
+
+		It("should default to Preserve behavior (delete group, keep namespace)", func() {
+			project := &projectmassopencloudv1alpha1.Project{}
+			Expect(k8sClient.Get(ctx, typeNamespacedName, project)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, project)).To(Succeed())
+			reconcileProject()
+
+			ns := &corev1.Namespace{}
+			err := k8sClient.Get(ctx, types.NamespacedName{Name: projectName}, ns)
+			Expect(err).NotTo(HaveOccurred(), "namespace should still exist with default action")
+
+			group := &unstructured.Unstructured{}
+			group.SetGroupVersionKind(groupGVK)
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: projectName}, group)
+			Expect(errors.IsNotFound(err)).To(BeTrue(), "group should be deleted with default action (Preserve)")
 		})
 	})
 })
