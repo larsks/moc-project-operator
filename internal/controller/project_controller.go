@@ -10,10 +10,13 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	projectmassopencloudv1alpha1 "cci-moc.github.com/moc-project-operator/api/v1alpha1"
 )
@@ -32,7 +35,8 @@ var groupGVK = schema.GroupVersionKind{
 
 type ProjectReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme              *runtime.Scheme
+	ControllerNamespace string
 }
 
 // +kubebuilder:rbac:groups=project.massopen.cloud,resources=projects,verbs=get;list;watch;create;update;patch;delete
@@ -56,6 +60,13 @@ func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	log.Info("reconciling project", "name", project.Name)
+
+	if project.Spec.DeleteAction == "" {
+		project.Spec.DeleteAction = projectmassopencloudv1alpha1.DeleteActionPreserve
+		if err := r.Update(ctx, project); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
 
 	if project.DeletionTimestamp != nil {
 		return r.handleDeletion(ctx, project)
@@ -117,7 +128,7 @@ func (r *ProjectReconciler) handleDeletion(ctx context.Context, project *project
 		if err := r.deleteNamespace(ctx, project.Name); err != nil {
 			return ctrl.Result{}, err
 		}
-	default:
+	case projectmassopencloudv1alpha1.DeleteActionPreserve:
 		if err := r.deleteGroup(ctx, project.Name); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -164,6 +175,7 @@ func (r *ProjectReconciler) reconcileNamespace(ctx context.Context, project *pro
 			ns.Labels = make(map[string]string)
 		}
 		ns.Labels[labelProjectName] = project.Name
+		delete(ns.Labels, labelProjectDeleted)
 		return nil
 	})
 	return err
@@ -174,6 +186,12 @@ func (r *ProjectReconciler) reconcileGroup(ctx context.Context, project *project
 	group.SetGroupVersionKind(groupGVK)
 	group.SetName(project.Name)
 	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, group, func() error {
+		labels := group.GetLabels()
+		if labels == nil {
+			labels = make(map[string]string)
+		}
+		labels[labelProjectName] = project.Name
+		group.SetLabels(labels)
 		users := make([]any, len(project.Spec.Members))
 		for i, m := range project.Spec.Members {
 			users[i] = m
@@ -192,6 +210,10 @@ func (r *ProjectReconciler) reconcileRoleBinding(ctx context.Context, project *p
 		},
 	}
 	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, rb, func() error {
+		if rb.Labels == nil {
+			rb.Labels = make(map[string]string)
+		}
+		rb.Labels[labelProjectName] = project.Name
 		rb.RoleRef = rbacv1.RoleRef{
 			APIGroup: "rbac.authorization.k8s.io",
 			Kind:     "ClusterRole",
@@ -217,6 +239,10 @@ func (r *ProjectReconciler) reconcileResourceQuota(ctx context.Context, project 
 		},
 	}
 	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, rq, func() error {
+		if rq.Labels == nil {
+			rq.Labels = make(map[string]string)
+		}
+		rq.Labels[labelProjectName] = project.Name
 		rq.Spec.Hard = make(corev1.ResourceList, len(project.Spec.Quotas))
 		for k, v := range project.Spec.Quotas {
 			rq.Spec.Hard[corev1.ResourceName(k)] = v
@@ -234,15 +260,47 @@ func (r *ProjectReconciler) reconcileLimitRange(ctx context.Context, project *pr
 		},
 	}
 	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, lr, func() error {
+		if lr.Labels == nil {
+			lr.Labels = make(map[string]string)
+		}
+		lr.Labels[labelProjectName] = project.Name
 		lr.Spec.Limits = project.Spec.Limits
 		return nil
 	})
 	return err
 }
 
+func (r *ProjectReconciler) mapChildToProject(ctx context.Context, obj client.Object) []reconcile.Request {
+	name, ok := obj.GetLabels()[labelProjectName]
+	if !ok {
+		return nil
+	}
+	log := logf.FromContext(ctx)
+	gvks, _, _ := r.Scheme.ObjectKinds(obj)
+	kind := "unknown"
+	if len(gvks) > 0 {
+		kind = gvks[0].Kind
+	}
+	log.Info("triggered by child resource", "project", name, "kind", kind, "name", obj.GetName())
+	return []reconcile.Request{
+		{NamespacedName: types.NamespacedName{
+			Name:      name,
+			Namespace: r.ControllerNamespace,
+		}},
+	}
+}
+
 func (r *ProjectReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	group := &unstructured.Unstructured{}
+	group.SetGroupVersionKind(groupGVK)
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&projectmassopencloudv1alpha1.Project{}).
+		Watches(&corev1.Namespace{}, handler.EnqueueRequestsFromMapFunc(r.mapChildToProject)).
+		Watches(group, handler.EnqueueRequestsFromMapFunc(r.mapChildToProject)).
+		Watches(&rbacv1.RoleBinding{}, handler.EnqueueRequestsFromMapFunc(r.mapChildToProject)).
+		Watches(&corev1.LimitRange{}, handler.EnqueueRequestsFromMapFunc(r.mapChildToProject)).
+		Watches(&corev1.ResourceQuota{}, handler.EnqueueRequestsFromMapFunc(r.mapChildToProject)).
 		Named("project").
 		Complete(r)
 }

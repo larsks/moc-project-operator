@@ -30,8 +30,9 @@ var _ = Describe("Project Controller", func() {
 
 	reconcileProject := func() {
 		r := &ProjectReconciler{
-			Client: k8sClient,
-			Scheme: k8sClient.Scheme(),
+			Client:              k8sClient,
+			Scheme:              k8sClient.Scheme(),
+			ControllerNamespace: "default",
 		}
 		_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
 		Expect(err).NotTo(HaveOccurred())
@@ -102,6 +103,20 @@ var _ = Describe("Project Controller", func() {
 			err := k8sClient.Get(ctx, types.NamespacedName{Name: projectName}, ns)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ns.Labels).To(HaveKeyWithValue("project.massopen.cloud/name", projectName))
+		})
+
+		It("should remove the deleted label from a namespace", func() {
+			reconcileProject()
+
+			ns := &corev1.Namespace{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: projectName}, ns)).To(Succeed())
+			ns.Labels[labelProjectDeleted] = "true"
+			Expect(k8sClient.Update(ctx, ns)).To(Succeed())
+
+			reconcileProject()
+
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: projectName}, ns)).To(Succeed())
+			Expect(ns.Labels).NotTo(HaveKey(labelProjectDeleted))
 		})
 
 		It("should create a group with the project members", func() {
@@ -177,6 +192,47 @@ var _ = Describe("Project Controller", func() {
 			err := k8sClient.Get(ctx, typeNamespacedName, project)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(project.Finalizers).To(ContainElement("project.massopen.cloud/finalizer"))
+		})
+
+		It("should re-create a child resource if it is deleted", func() {
+			reconcileProject()
+
+			group := &unstructured.Unstructured{}
+			group.SetGroupVersionKind(groupGVK)
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: projectName}, group)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, group)).To(Succeed())
+
+			err := k8sClient.Get(ctx, types.NamespacedName{Name: projectName}, group)
+			Expect(errors.IsNotFound(err)).To(BeTrue())
+
+			reconcileProject()
+
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: projectName}, group)).To(Succeed())
+			users, found, err := unstructured.NestedStringSlice(group.Object, "users")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeTrue())
+			Expect(users).To(ConsistOf("user1", "user2"))
+		})
+
+		It("should label child resources with the project name", func() {
+			reconcileProject()
+
+			group := &unstructured.Unstructured{}
+			group.SetGroupVersionKind(groupGVK)
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: projectName}, group)).To(Succeed())
+			Expect(group.GetLabels()).To(HaveKeyWithValue(labelProjectName, projectName))
+
+			rb := &rbacv1.RoleBinding{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: projectName, Namespace: projectName}, rb)).To(Succeed())
+			Expect(rb.Labels).To(HaveKeyWithValue(labelProjectName, projectName))
+
+			lr := &corev1.LimitRange{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: projectName, Namespace: projectName}, lr)).To(Succeed())
+			Expect(lr.Labels).To(HaveKeyWithValue(labelProjectName, projectName))
+
+			rq := &corev1.ResourceQuota{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: projectName, Namespace: projectName}, rq)).To(Succeed())
+			Expect(rq.Labels).To(HaveKeyWithValue(labelProjectName, projectName))
 		})
 
 		It("should update the group when members change", func() {
