@@ -27,6 +27,12 @@ type ProjectSpec struct {
 	// displayName is human-friendly name for this project
 	DisplayName string `json:"displayName,omitempty"`
 
+	// projectId uniquely identifies the project in the provider
+	ProjectID string `json:"projectID,omitempty"`
+
+	// projectLead is the administrative contact for a project
+	ProjectLead string `json:"projectLead,omitempty"`
+
 	// members is a list of users that are members of this project
 	Members []string `json:"members,omitempty"`
 
@@ -37,6 +43,13 @@ type ProjectSpec struct {
 	Limits []corev1.LimitRangeItem `json:"limits,omitempty"`
 
 	// deleteAction determines what happens to project resources when the Project resource is deleted.
+	//
+	// deleteAction can have one of the following values:
+	//
+	// - Ignore -- Do not delete any resources when the Project is deleted.
+	// - Preserve -- Delete the Group when the Project is deleted, but preserve the project Namespace and all resources.
+	// - Delete -- Delete the Group, the Namespace, and all associated resources.
+	// +kubebuilder:default=Preserve
 	DeleteAction DeleteAction `json:"deleteAction,omitempty"`
 }
 
@@ -57,6 +70,9 @@ type ProjectStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="ID",type="string",JSONPath=".spec.projectID",description="Project ID"
+// +kubebuilder:printcolumn:name="Lead",type="string",JSONPath=".spec.projectLead",description="Project lead"
+// +kubebuilder:printcolumn:name="Display Name",type="string",JSONPath=".spec.displayName",description="Project display name"
 
 // Project is the Schema for the projects API.
 type Project struct {

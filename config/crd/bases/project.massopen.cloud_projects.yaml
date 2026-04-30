@@ -14,7 +14,20 @@ spec:
     singular: project
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: Project ID
+      jsonPath: .spec.projectID
+      name: ID
+      type: string
+    - description: Project lead
+      jsonPath: .spec.projectLead
+      name: Lead
+      type: string
+    - description: Project display name
+      jsonPath: .spec.displayName
+      name: Display Name
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: Project is the Schema for the projects API.
@@ -40,8 +53,15 @@ spec:
             description: ProjectSpec defines the desired state of Project.
             properties:
               deleteAction:
-                description: deleteAction determines what happens to project resources
-                  when the Project resource is deleted.
+                default: Preserve
+                description: |-
+                  deleteAction determines what happens to project resources when the Project resource is deleted.
+
+                  deleteAction can have one of the following values:
+
+                  - Ignore -- Do not delete any resources when the Project is deleted.
+                  - Preserve -- Delete the Group when the Project is deleted, but preserve the project Namespace and all resources.
+                  - Delete -- Delete the Group, the Namespace, and all associated resources.
                 enum:
                 - Ignore
                 - Preserve
@@ -121,6 +141,12 @@ spec:
                 items:
                   type: string
                 type: array
+              projectID:
+                description: projectId uniquely identifies the project in the provider
+                type: string
+              projectLead:
+                description: projectLead is the administrative contact for a project
+                type: string
               quotas:
                 additionalProperties:
                   anyOf:
