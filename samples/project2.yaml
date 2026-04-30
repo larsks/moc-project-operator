@@ -1,0 +1,20 @@
+apiVersion: project.massopen.cloud/v1alpha1
+kind: Project
+metadata:
+  name: example-project-2
+spec:
+  displayName: Example Project 2
+  projectLead: sidney@example.com
+  projectID: "4321"
+  members:
+    - montgomery
+    - nancy
+    - olaf
+  limits:
+    - type: Container
+      default:
+        cpu: 2
+      defaultRequest:
+        cpu: 500m
+  quotas:
+    cpu: 4

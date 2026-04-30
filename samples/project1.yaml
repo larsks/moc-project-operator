@@ -1,0 +1,13 @@
+apiVersion: project.massopen.cloud/v1alpha1
+kind: Project
+metadata:
+  name: example-project-1
+spec:
+  displayName: Example Project 1
+  projectLead: alice@example.com
+  projectID: "1234"
+  members:
+    - alice
+    - bob
+    - carol
+    - dan
