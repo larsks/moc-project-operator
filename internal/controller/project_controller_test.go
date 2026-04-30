@@ -8,6 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -35,6 +36,15 @@ var _ = Describe("Project Controller", func() {
 			},
 			Spec: projectmassopencloudv1alpha1.ProjectSpec{
 				Members: []string{"user1", "user2"},
+				Limits: []corev1.LimitRangeItem{
+					{
+						Type: corev1.LimitTypeContainer,
+						Default: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("500m"),
+							corev1.ResourceMemory: resource.MustParse("512Mi"),
+						},
+					},
+				},
 			},
 		}
 		err := k8sClient.Get(ctx, typeNamespacedName, &projectmassopencloudv1alpha1.Project{})
@@ -127,6 +137,20 @@ var _ = Describe("Project Controller", func() {
 				Kind:     "Group",
 				Name:     projectName,
 			}))
+		})
+
+		It("should create a limitrange with the project limits", func() {
+			reconcileProject()
+
+			lr := &corev1.LimitRange{}
+			err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      projectName,
+				Namespace: projectName,
+			}, lr)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(lr.Spec.Limits).To(HaveLen(1))
+			Expect(lr.Spec.Limits[0].Type).To(Equal(corev1.LimitTypeContainer))
+			Expect(lr.Spec.Limits[0].Default).To(HaveKeyWithValue(corev1.ResourceCPU, resource.MustParse("500m")))
 		})
 	})
 })

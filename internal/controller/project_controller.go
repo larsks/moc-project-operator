@@ -66,6 +66,9 @@ func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if err := r.reconcileRoleBinding(ctx, project); err != nil {
 		return ctrl.Result{}, err
 	}
+	if err := r.reconcileLimitRange(ctx, project); err != nil {
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -121,6 +124,20 @@ func (r *ProjectReconciler) reconcileRoleBinding(ctx context.Context, project *p
 				Name:     project.Name,
 			},
 		}
+		return nil
+	})
+	return err
+}
+
+func (r *ProjectReconciler) reconcileLimitRange(ctx context.Context, project *projectmassopencloudv1alpha1.Project) error {
+	lr := &corev1.LimitRange{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      project.Name,
+			Namespace: project.Name,
+		},
+	}
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, lr, func() error {
+		lr.Spec.Limits = project.Spec.Limits
 		return nil
 	})
 	return err
