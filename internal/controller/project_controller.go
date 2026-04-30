@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -291,6 +292,10 @@ func (r *ProjectReconciler) mapChildToProject(ctx context.Context, obj client.Ob
 }
 
 func (r *ProjectReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if _, err := mgr.GetRESTMapper().RESTMapping(groupGVK.GroupKind(), groupGVK.Version); err != nil {
+		return fmt.Errorf("required API %s not available: %w", groupGVK, err)
+	}
+
 	group := &unstructured.Unstructured{}
 	group.SetGroupVersionKind(groupGVK)
 
