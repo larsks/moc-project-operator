@@ -40,6 +40,10 @@ spec:
             description: ProjectSpec defines the desired state of Project.
             properties:
               deleteAction:
+                enum:
+                - Ignore
+                - Preserve
+                - Delete
                 type: string
               displayName:
                 type: string

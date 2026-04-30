@@ -31,6 +31,7 @@ type ProjectSpec struct {
 	DeleteAction DeleteAction                 `json:"deleteAction,omitempty"`
 }
 
+// +kubebuilder:validation:Enum=Ignore;Preserve;Delete
 type DeleteAction string
 
 const (

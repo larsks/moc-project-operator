@@ -36,6 +36,11 @@ type ProjectReconciler struct {
 // +kubebuilder:rbac:groups=project.massopen.cloud,resources=projects,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=project.massopen.cloud,resources=projects/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=project.massopen.cloud,resources=projects/finalizers,verbs=update
+// +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=limitranges,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=resourcequotas,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=user.openshift.io,resources=groups,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
