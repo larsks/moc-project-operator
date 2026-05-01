@@ -13,10 +13,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	projectmassopencloudv1alpha1 "cci-moc.github.com/moc-project-operator/api/v1alpha1"
@@ -80,23 +82,44 @@ func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 	}
 
+	if err := r.setPhase(ctx, project, projectmassopencloudv1alpha1.PhaseProgressing); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	if err := r.reconcileNamespace(ctx, project); err != nil {
+		_ = r.setPhase(ctx, project, projectmassopencloudv1alpha1.PhaseFailed)
 		return ctrl.Result{}, err
 	}
 	if err := r.reconcileGroup(ctx, project); err != nil {
+		_ = r.setPhase(ctx, project, projectmassopencloudv1alpha1.PhaseFailed)
 		return ctrl.Result{}, err
 	}
 	if err := r.reconcileRoleBinding(ctx, project); err != nil {
+		_ = r.setPhase(ctx, project, projectmassopencloudv1alpha1.PhaseFailed)
 		return ctrl.Result{}, err
 	}
 	if err := r.reconcileLimitRange(ctx, project); err != nil {
+		_ = r.setPhase(ctx, project, projectmassopencloudv1alpha1.PhaseFailed)
 		return ctrl.Result{}, err
 	}
 	if err := r.reconcileResourceQuota(ctx, project); err != nil {
+		_ = r.setPhase(ctx, project, projectmassopencloudv1alpha1.PhaseFailed)
+		return ctrl.Result{}, err
+	}
+
+	if err := r.setPhase(ctx, project, projectmassopencloudv1alpha1.PhaseReady); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *ProjectReconciler) setPhase(ctx context.Context, project *projectmassopencloudv1alpha1.Project, phase projectmassopencloudv1alpha1.Phase) error {
+	if project.Status.Phase == phase {
+		return nil
+	}
+	project.Status.Phase = phase
+	return r.Status().Update(ctx, project)
 }
 
 func (r *ProjectReconciler) handleDeletion(ctx context.Context, project *projectmassopencloudv1alpha1.Project) (ctrl.Result, error) {
@@ -300,7 +323,7 @@ func (r *ProjectReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	group.SetGroupVersionKind(groupGVK)
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&projectmassopencloudv1alpha1.Project{}).
+		For(&projectmassopencloudv1alpha1.Project{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(&corev1.Namespace{}, handler.EnqueueRequestsFromMapFunc(r.mapChildToProject)).
 		Watches(group, handler.EnqueueRequestsFromMapFunc(r.mapChildToProject)).
 		Watches(&rbacv1.RoleBinding{}, handler.EnqueueRequestsFromMapFunc(r.mapChildToProject)).

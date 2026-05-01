@@ -27,6 +27,10 @@ spec:
       jsonPath: .spec.displayName
       name: Display Name
       type: string
+    - description: Project phase
+      jsonPath: .status.phase
+      name: Phase
+      type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:
@@ -159,6 +163,12 @@ spec:
             type: object
           status:
             description: ProjectStatus defines the observed state of Project.
+            properties:
+              phase:
+                default: Unknown
+                type: string
+            required:
+            - phase
             type: object
         type: object
     served: true

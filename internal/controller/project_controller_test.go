@@ -235,6 +235,14 @@ var _ = Describe("Project Controller", func() {
 			Expect(rq.Labels).To(HaveKeyWithValue(labelProjectName, projectName))
 		})
 
+		It("should set phase to Ready after successful reconciliation", func() {
+			reconcileProject()
+
+			project := &projectmassopencloudv1alpha1.Project{}
+			Expect(k8sClient.Get(ctx, typeNamespacedName, project)).To(Succeed())
+			Expect(project.Status.Phase).To(Equal(projectmassopencloudv1alpha1.PhaseReady))
+		})
+
 		It("should update the group when members change", func() {
 			reconcileProject()
 

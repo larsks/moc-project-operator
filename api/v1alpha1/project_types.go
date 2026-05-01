@@ -64,15 +64,25 @@ const (
 
 // ProjectStatus defines the observed state of Project.
 type ProjectStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// +kubebuilder:default=Unknown
+	Phase Phase `json:"phase"`
 }
+
+type Phase string
+
+const (
+	PhaseUnknown     Phase = "Unknown"
+	PhaseReady       Phase = "Ready"
+	PhaseProgressing Phase = "Progressing"
+	PhaseFailed      Phase = "Failed"
+)
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="ID",type="string",JSONPath=".spec.projectID",description="Project ID"
 // +kubebuilder:printcolumn:name="Lead",type="string",JSONPath=".spec.projectLead",description="Project lead"
 // +kubebuilder:printcolumn:name="Display Name",type="string",JSONPath=".spec.displayName",description="Project display name"
+// +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase",description="Project phase"
 
 // Project is the Schema for the projects API.
 type Project struct {
